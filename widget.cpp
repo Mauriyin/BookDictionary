@@ -227,7 +227,7 @@ void Widget::print_message(BitTree DT)
 
 int Widget::isNull(char c)
 {
-    if((c>='a'&&c<='z')||(c>='A'&&c<='Z'))
+    if((c>='a'&&c<='z')||(c>='A'&&c<='Z')||c=='\'')
         return 0;
     else
         return 1;
@@ -277,12 +277,21 @@ Status Widget::Opentxt(BitTree *DT)
        ui->label_2->setText(tr("当前检索文件为：")+hello);
        return TRUE;
    }
+   str[counter] = '\0'; //成功返回SUCCESS 否则返回FAIL
+   if(str[0]=='\'')
+       for(int i = 0;str[i]!='\0';i++)
+       {
+           str[i]=str[i+1];
+       }
    if(str[0]>='A'&&str[0]<='Z')
    {
        str[0] = str[0]+'a'-'A';
    }
-   str[counter] = '\0'; //成功返回SUCCESS 否则返回FAIL
    counter = 0;
+   if(str[0]=='\0')
+   {
+       goto M;
+   }
    num++;
    strcpy(e.word,str);
    e.savedate = (DateList)malloc(sizeof(SaveDate));
