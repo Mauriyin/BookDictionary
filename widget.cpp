@@ -4,16 +4,20 @@
 #include <QTime>
 #include <QProcess>
 #include <QDir>
-#define Max_Num 1000000
+
 
 int number = 1;
 int keep = 0;
 int num = 0;
 int pep;
+int hashwordnum = 0;
+int bittreewordnum=0;
 BitTree dTable = NULL;
-int BiTree_Static = -1;
-
-SaveWord word[Max_Num];
+int BiTree_hash = -1;
+HashTree *HT = NULL;
+int hushnum = 1;
+char hashtxt[1000];
+char bittxt[1000];
 
 Widget::Widget(QWidget *parent) :
     QWidget(parent),
@@ -21,7 +25,6 @@ Widget::Widget(QWidget *parent) :
 {
     ui->setupUi(this);
     ui->radioButton->toggle();
-    ui->label->setText(tr("词典中总共有 %1 个单词").arg(num));
     ui->label_2->setText(tr("当前检索文件为："));
     ui->lineEdit->setStyleSheet("background-color: rgba(0,0,0,0)");
     ui->lineEdit_2->setStyleSheet("background-color: rgba(0,0,0,0)");
@@ -120,11 +123,13 @@ Status Widget::InsertDSTable(BitTree *DT, SaveWord e)
     if(!SearchDSTable2(*DT,e.word, NULL, &p))
     {
         s = (BitTree)malloc(sizeof(BitNode));
-        //s->Node.savedate = (DateList)malloc(sizeof(SaveDate));
+        s->Node.savedate = (DateList)malloc(sizeof(SaveDate));
         s->Node = e;
         s->Node.wei = s->Node.savedate;
         s->Lchild = s->Rchild = NULL;
         s->Node.wordnum = number;
+        number=1;
+        num++;
         if(!p)
         {
             *DT = s;    //被插结点*s为新的根结点
@@ -157,70 +162,13 @@ Status Widget::InsertDSTable(BitTree *DT, SaveWord e)
     }
 }
 
-void Widget::Delete(BitTree *DT)
-{
-    BitTree q,s;
-
-    //右子树为空则只需重接它的左子树
-    if(!(*DT)->Rchild)
-    {
-         q = *DT;
-        *DT = (*DT)->Lchild;
-        free(q);
-    }
-    //只需重接它的右子树
-    else if(!(*DT)->Lchild)
-    {
-         q = *DT;
-         *DT = (*DT)->Rchild;
-        free(q);
-    }
-
-    else
-    {
-        q = *DT;
-        s = (*DT)->Lchild;
-
-        //转左，然后向右到尽头
-        while(s->Rchild)
-        {
-            q = s;
-            s = s->Rchild;
-        }
-
-        (*DT)->Node = s->Node;    //s指向被删结点的前驱
-
-
-        if(q != *DT)
-        {
-            q->Rchild = s->Lchild;    //重接*q的右子树
-        }
-
-        else
-        {
-            q->Lchild = s->Lchild;    //重接*q的左子树
-        }
-
-        free(s);
-    }
-}
-
-void Widget::TraverseDSTable(BitTree DT, void (*Visit)(SaveWord))
-{
-    if(DT)
-        {
-            TraverseDSTable(DT->Lchild, Visit);    //先遍历左子树
-            Visit(DT->Node);    //再访问根结点
-            TraverseDSTable(DT->Rchild, Visit);    //遍历右子树
-        }
-}
-
 void Widget::print_message(BitTree DT)
 {
     if(DT)
         {
             print_message(DT->Lchild);    //先遍历左子树
             ui->listWidget->addItem(tr("单词 ")+DT->Node.word+tr(" 出现了 %1 次").arg(DT->Node.wordnum));
+             bittreewordnum ++;
             print_message(DT->Rchild);    //遍历右子树
         }
 }
@@ -238,7 +186,10 @@ Status Widget::Opentxt(BitTree *DT)
     char c;
     DestroyDSTable(DT);
     QString name = ui->lineEdit_2->text();
-    const char * hello = name.toStdString().data();
+    const char *hello = name.toStdString().data();
+    qDebug()<<1;
+    strcpy(bittxt,hello);
+    qDebug()<<1;
     int num = 0;
     int counter = 0;
     int k=1;
@@ -250,6 +201,199 @@ Status Widget::Opentxt(BitTree *DT)
     if(fp ==NULL)
        {
         return FALSE;
+       }
+
+  M:
+          while((c = fgetc(fp)) != EOF)
+   {
+
+       if(c=='\n')
+       {
+           k++;
+           num = 0;
+       }
+
+       if( isNull(c) && (counter <= 0))
+       { //消去非字母字符
+           continue;
+       }
+        else if(isNull(c) && (counter > 0))
+       { //一个单词读取完毕
+            break;
+       }
+       str[counter++] = c;
+   }
+   if(c==EOF)
+   {
+       ui->label_2->setText(tr("当前检索文件为：")+hello);
+       fclose(fp);
+       return TRUE;
+   }
+   str[counter] = '\0'; //成功返回SUCCESS 否则返回FAIL
+   if(str[0]=='\'')
+       for(int i = 0;str[i]!='\0';i++)
+       {
+           str[i]=str[i+1];
+       }
+   if(str[0]>='A'&&str[0]<='Z')
+   {
+       str[0] = str[0]+'a'-'A';
+   }
+   counter = 0;
+   if(str[0]=='\0')
+   {
+       goto M;
+   }
+   num++;
+   strcpy(e.word,str);
+   e.wordnum = 1;
+   e.savedate = (DateList)malloc(sizeof(SaveDate));
+   e.savedate->Page = k;
+   e.savedate->Line = num;
+   e.savedate ->next = NULL;
+   InsertDSTable(&(*DT),e);
+   goto M;
+}
+
+bool Widget::readBTree(BitTree *DT)
+{
+    FILE *fs;
+    SaveWord e;
+    char c;
+    if((fs = fopen("SaveBitTree.txt","r"))==NULL)
+    {
+        return 0;
+    }
+    else
+    {
+        while((c=fgetc(fs))!=EOF)
+        {
+            fscanf(fs,"%s %d",e.word,&e.wordnum);
+            e.savedate = (DateList)malloc(sizeof(SaveDate));
+            fscanf(fs,"%d %d",&e.savedate->Line,&e.savedate->Page);
+            e.wei=e.savedate;
+            e.wei->next=NULL;
+            while((c=fgetc(fs))!='#')
+            {
+                e.wei->next = (DateList)malloc(sizeof(SaveDate));
+                e.wei=e.wei->next;
+                e.wei->next = NULL;
+                fscanf(fs,"%d %d",&e.wei->Line,&e.wei->Page);
+            }
+           InsertDSTable(&(*DT),e);
+           fgetc(fs);
+        }
+    }
+    fclose(fs);
+    return 1;
+}
+
+void Widget::InitHash()
+{
+
+    for(int i =0;i<hushnum;i++)
+    {
+        HT[i]=(HashTree)malloc(sizeof(HashNode));
+        HT[i]->wordnum = 0;
+        HT[i]->next = NULL;
+        HT[i]->first = NULL;
+    }
+}
+
+void Widget::Print_Hash()
+{
+    for(int i = 0;i<hushnum;i++)
+    {
+        HashTree p = HT[i];
+        while(p->next!=NULL)
+        {
+            ui->listWidget->addItem(tr("单词 ")+p->word+tr(" 出现了 %1 次").arg(p->wordnum));
+            hashwordnum++;
+            p = p->next;
+        }
+    }
+   ui->label->setText(tr("词典中总共有 %1 个单词").arg(hashwordnum));
+   hashwordnum = 0;
+}
+
+void Widget::InsertHash(HashNode e)
+{
+    int v = GetHashNum(e.word);
+    HashTree p = HT[v];
+    bool REPE = false;
+    while(p->next!=NULL)
+    {
+       if(strcmp(p->word,e.word)==0)
+       {
+           if(p->first == NULL)
+           {
+               p->first = (Repeat *)malloc(sizeof(Repeat));
+               p->tail = p->first;
+               p->first->next =NULL;;
+               p->first->line =  e.line;
+               p->first->num = e.nuber;
+               p->wordnum++;
+           }
+           else
+           {
+               p->tail->next=(Repeat *)malloc(sizeof(Repeat));
+               p->tail=p->tail->next;
+               p->tail->line = e.line;
+               p->tail->num = e.nuber;
+               p->tail->next = NULL;
+               p->wordnum++;
+          }
+         REPE = true;
+       }
+        p=p->next;
+    }
+    if(REPE==false)
+    {
+    strcpy(p->word,e.word);
+    p->line = e.line;
+    p->nuber = e.nuber;
+    p->wordnum ++;
+    p->next = (HashTree)malloc(sizeof(HashNode));
+    p->next->wordnum = 0;
+    p->next->next = NULL;
+    p->next->first = NULL;
+    }
+}
+
+int Widget::GetHashNum(char *word)
+{
+    int hash = 0;
+    int i;
+    for (i=0; *word; i++)
+    {
+        if ((i & 1) == 0)
+        {
+            hash ^= ((hash << 7) ^ (*word++) ^ (hash >> 3));
+        }
+        else
+        {
+            hash ^= (~((hash << 11) ^ (*word++) ^ (hash >> 5)));
+        }
+    }
+    return (hash & 0x7FFFFFFF)%hushnum;
+}
+
+Status Widget::OpenHash()
+{
+    char c;
+    QString name = ui->lineEdit_2->text();
+    const char *hello = name.toStdString().data();
+    strcpy(hashtxt,hello);
+    int num = 0;
+    int counter = 0;
+    int k=1;
+    FILE *fp;
+    char str[100];
+    fp = fopen(hello,"r");
+    HashNode e;
+    if(fp ==NULL)
+       {
+          return FALSE;
        }
 
   M:
@@ -294,77 +438,11 @@ Status Widget::Opentxt(BitTree *DT)
    }
    num++;
    strcpy(e.word,str);
-   e.savedate = (DateList)malloc(sizeof(SaveDate));
-   e.savedate->Page = k;
-   e.savedate->Line = num;
-   e.savedate ->next = NULL;
-   InsertDSTable(&(*DT),e);
+   e.line = k;
+   e.nuber = num;
+   InsertHash(e);
    goto M;
 }
-
-int Widget::readBTree(BitTree *DT)
-{
-    FILE *fs;
-    SaveWord e;
-    char c;
-    if((fs = fopen("save.txt","r"))==NULL)
-    {
-        return 0;
-    }
-    else
-    {
-        while((c=fgetc(fs))!=EOF)
-        {
-            fscanf(fs,"%s %d\n",e.word,&e.wordnum);
-            e.savedate = (DateList)malloc(sizeof(SaveDate));
-            e.savedate->next = NULL;
-            DateList q = e.savedate;
-            fscanf(fs,"%d %d",&q->Page,&q->Line);
-            while((c=fgetc(fs))!='#')
-            {
-                q->next = (DateList)malloc(sizeof(SaveDate));
-                q = q->next;
-                q->next = NULL;
-                fscanf(fs,"%d %d",&q->Page,&q->Line);
-                number++;
-            }
-            fgetc(fs);
-            InsertDSTable(&(*DT),e);
-            number = 1;
-        }
-    }
-    fclose(fs);
-    return 1;
-}
-
-void Widget::CreateStaticTree(BitTree DT)
-{
-    if(DT)
-        {
-            CreateStaticTree(DT->Lchild);    //先遍历左子树
-            word[num] = DT->Node;
-            num++;
-            CreateStaticTree(DT->Rchild);    //遍历右子树
-        }
-}
-
-void Widget::on_pushButton_2_clicked()
-{
-    ui->listWidget->clear();
-   if(BiTree_Static == 1)
-    {
-        print_message(dTable);
-    }
-   else if(BiTree_Static == 2)
-    {
-        int i;
-        for(i=0;i<num;i++)
-        {
-          ui->listWidget->addItem(tr("单词 ")+word[i].word+tr(" 出现了 %1 次").arg(word[i].wordnum));
-        }
-    }    
-}
-
 
 void Widget::on_readtxt_clicked()
 {
@@ -377,24 +455,43 @@ void Widget::on_readtxt_clicked()
   ui->listWidget_2->clear();
   num = 0;
   QTime t;
+  QTime h;
   t.start();
-  if(num!=0)
-      num = 0;
-  if(Opentxt(&dTable))
+  if(BiTree_hash == 1)
   {
-      int s =t.elapsed();
-      ui->label_4->setText(tr("%1ms").arg(s));
-      CreateStaticTree(dTable);
-      s = t.elapsed();
-      ui->label_5->setText(tr("%1ms").arg(s));
-      ui->label->setText(tr("词典中总共有 %1 个单词").arg(num));
-      QMessageBox::about(this,"","文件读取成功！        ");
-      ui->lineEdit_2->clear();
-  }
-  else
-  {
+    if(Opentxt(&dTable))
+    {
+        int s =t.elapsed();
+        ui->label_4->setText(tr("%1ms").arg(s));
+        QMessageBox::about(this,"","二叉树文件读取成功！        ");
         ui->lineEdit_2->clear();
-        QMessageBox::warning(this,"","文件读取失败！     ");
+    }
+    else
+    {
+        QMessageBox::warning(this,"","二叉树文件读取失败！        ");
+        ui->lineEdit_2->clear();
+    }
+
+  }
+  else if(BiTree_hash == 2)
+  {
+      hushnum = 103001;
+      HT =(HashTree *)malloc(sizeof(HashTree)*hushnum);
+      InitHash();
+      h.start();
+      if(OpenHash()==TRUE)
+      {
+          int s =h.elapsed();
+          ui->label_5->setText(tr("%1ms").arg(s));
+          //ui->label->setText(tr("词典中总共有 %1 个单词").arg(num));
+          QMessageBox::about(this,"","哈希表文件读取成功！        ");
+          ui->lineEdit_2->clear();
+      }
+      else
+      {
+          QMessageBox::warning(this,"","哈希表文件读取失败！        ");
+          ui->lineEdit_2->clear();
+      }
   }
 }
 
@@ -402,39 +499,22 @@ void Widget::on_readtxt_clicked()
 
 void Widget::on_radioButton_2_toggled()
 {
-     BiTree_Static = 2;
+     BiTree_hash = 2;
+     ui->label_2->setText(tr("当前检索文件为：")+hashtxt);
      ui->listWidget->clear();
      ui->listWidget_2->clear();
      ui->label_11->clear();
+     ui->label->clear();
 }
 
 void Widget::on_radioButton_toggled()
 {
-     BiTree_Static = 1;
+     BiTree_hash = 1;
+     ui->label_2->setText(tr("当前检索文件为：")+bittxt);
      ui->listWidget->clear();
      ui->listWidget_2->clear();
+     ui->label->clear();
      ui->label_11->clear();
-}
-
-int Widget::Search_Bin(SaveWord *word,char *e)
-{
-    //折半查找
-    int low,high,mid;
-    pep=0;
-    low=0;
-    high=num;
-    while (low<=high)
-    {
-        mid=(low+high)/2;
-        pep++;
-        if (strcmp(e,word[mid].word)==0)
-            return mid;
-        else if (strcmp(e,word[mid].word)<0)
-            high=mid-1;
-        else
-            low=mid+1;
-    }
-    return -1;
 }
 
 void Widget::on_pushButton_clicked()
@@ -448,7 +528,7 @@ void Widget::on_pushButton_clicked()
         SearKey[i]=str[i].toLatin1();
     }
     SearKey[i]='\0';
-    if(BiTree_Static == 1)
+    if(BiTree_hash == 1)
     {
         QTime t;
         t.start();
@@ -458,115 +538,136 @@ void Widget::on_pushButton_clicked()
         {
             int a = t.elapsed();
             ui->label_14->setText(tr("%1ms").arg(a));
-            int j = 0;
             ui->label_7->setText(tr("%1次").arg(keep));
             keep = 0;
             DateList q = searchResult->Node.savedate;
             ui->label_11->setText(tr("单词 ")+SearKey+tr(" 出现了 %1 次!").arg(searchResult->Node.wordnum));
-            for(j = 0;j < searchResult->Node.wordnum;j++)
+            for(int i=0;i<searchResult->Node.wordnum;i++)
             {
-              ui->listWidget_2->addItem(tr("第 %1 次出现在 line: %2  number: %3 ").arg(j+1).arg(q->Page).arg(q->Line));
+              ui->listWidget_2->addItem(tr("第 %1 次出现在 line: %2  number: %3 ").arg(i+1).arg(q->Page).arg(q->Line));
               q = q->next;
             }
         }
         else
-            ui->label_11->setText(tr("Can't find this word!"));
+            QMessageBox::warning(this,"","Can't find this word!     ");
     }
-    else if(BiTree_Static == 2)
+    else if(BiTree_hash == 2)
     {
+        int ah=GetHashNum(SearKey);
+        HashTree p =HT[ah];
+        bool find=false;
+        int bi=0;
         QTime t;
-        int a = t.elapsed();
-        ui->label_15->setText(tr("%1ms").arg(a));
-        int k = Search_Bin(word,SearKey);
-        if(k>=0)
+        t.start();
+        while(p->next!=NULL)
         {
-         ui->label_8->setText(tr("%1次").arg(pep));
-         ui->label_11->setText(tr("单词 ")+SearKey+tr(" 出现了 %1 次!").arg(word[k].wordnum));
-         int i = 0;
-         DateList q = word[k].savedate;
-         for(i = 0;i < word[k].wordnum;i++)
+            bi++;
+            if(strcmp(p->word,SearKey)==0)
             {
-             ui->listWidget_2->addItem(tr("第 %1 次出现在 line: %2  number: %3 ").arg(i+1).arg(q->Page).arg(q->Line));
-             q = q->next;
-             }
-         }
-         else
-         {
-            ui->label_11->setText(tr("Can't find this word!"));
-         }
+                int j=2;
+                int s = t.elapsed();
+                ui->label_15->setText(tr("%1ms").arg(s));
+                ui->label_11->setText(tr("单词 ")+SearKey+tr(" 出现了 %1 次!").arg(p->wordnum));
+                ui->listWidget_2->addItem(tr("第 1 次出现在 line: %2  number: %3 ").arg(p->line).arg(p->nuber));
+                Repeat *q=p->first;
+                while(q!=NULL)
+                {
+                  ui->listWidget_2->addItem(tr("第 %1 次出现在 line: %2  number: %3 ").arg(j).arg(q->line).arg(q->num));
+                  q=q->next;
+                  j++;
+                }
+                ui->label_8->setText(tr("%1次").arg(bi));
+                find = true;
+                break;
+            }
+            p=p->next;
+        }
+    if(find==false)
+         QMessageBox::warning(this,"","Can't find this word!     ");
     }
 }
 
-int Widget::saveSTree(SaveWord *word)
+bool Widget::savbittree(BitTree DT)
 {
+  if(DT)
+  {
+    savbittree(DT->Lchild);
     FILE *fs;
     int i = 0;
-    int k = 0;
-    if((fs = fopen("save.txt","w+"))==NULL)
+    if((fs = fopen("SaveBitTree.txt","a"))==NULL)
     {
-       return 0;
+        return false;
     }
     else
     {
-        for(k=0;k<num;k++)
-        {
-        fprintf(fs," %s %d\n",word[k].word,word[k].wordnum);
-        DateList q = word[k].savedate;
-        for(i=0;i<word[k].wordnum;i++)
+        fprintf(fs," %s %d\n", DT->Node.word, DT->Node.wordnum);
+        DateList q = DT->Node.savedate;
+        for(i=0;i<DT->Node.wordnum;i++)
         {
             fprintf(fs," %d %d",q->Page,q->Line);
             q = q->next;
         }
         fprintf(fs,"#\n");
-        }
     }
     fclose(fs);
-    return 1;
+    savbittree(DT->Rchild);
+   }
+   return true;
+}
+
+bool Widget::savehash()
+{
+    FILE *fs;
+    int i ;
+    if((fs = fopen("SaveHash.txt","w"))==NULL)
+    {
+        return false;
+    }
+    for(i=0;i<hushnum;i++)
+    {
+       HashTree p =HT[i];
+       while(p->next!=NULL)
+       {
+            fprintf(fs," %s\n",p->word);
+            fprintf(fs," %d %d",p->line,p->nuber);
+            Repeat *q=p->first;
+            while(q!=NULL)
+            {
+              fprintf(fs," %d %d",q->line,q->num);
+              q=q->next;
+            }
+            fprintf(fs,"#\n");
+            p=p->next;
+        }
+
+    }
+    fclose(fs);
+    return true;
 }
 
 void Widget::on_pushButton_5_clicked()
 {
-   if(saveSTree(word))
-       QMessageBox::about(this,"","文件保存成功！     ");
+    if(BiTree_hash==1)
+    {
+        FILE *fp;
+        fp = fopen("SaveBitTree.txt","w");
+        fclose(fp);
+        savbittree(dTable);
+        if(savbittree(dTable)==true)
+            QMessageBox::about(this,"","二叉树文件保存成功！     ");
+        else
+            QMessageBox::warning(this,"","二叉树文件保存失败！     ");
+    }
    else
-       QMessageBox::warning(this,"","文件保存失败！     ");
+    {
+        if(savehash()==true)
+            QMessageBox::about(this,"","哈希表文件保存成功！     ");
+        else
+            QMessageBox::warning(this,"","哈希表文件保存失败！     ");
+    }
 }
 
-void Widget::readSTree(SaveWord *word)
-{
-    FILE *fs;
-    char c;
-    QString name("save.txt");
-    const char * hello = name.toStdString().data();
-    if((fs = fopen(hello,"r"))==NULL)
-    {
-        QMessageBox::warning(this,"","文件恢复失败！     ");
-    }
-    else
-    {
-        while((c=fgetc(fs))!=EOF)
-        {
-            fscanf(fs,"%s %d\n",word[num].word,&word[num].wordnum);
-            word[num].savedate = (DateList)malloc(sizeof(SaveDate));
-            word[num].savedate->next = NULL;
-            DateList q = word[num].savedate;
-            fscanf(fs,"%d %d",&q->Page,&q->Line);
-            while((c=fgetc(fs))!='#')
-            {
-                q->next = (DateList)malloc(sizeof(SaveDate));
-                q = q->next;
-                q->next = NULL;
-                fscanf(fs,"%d %d",&q->Page,&q->Line);
-            }
-            fgetc(fs);
-            num++;
-        }
-        QMessageBox::about(this,"","文件恢复成功！     ");
-        ui->label_2->setText(tr("当前检索文件为：")+hello);
-        ui->label->setText(tr("词典中总共有 %1 个单词").arg(num));
-    }
-    fclose(fs);
-}
+
 
 void Widget::on_pushButton_6_clicked()
 {
@@ -579,17 +680,90 @@ void Widget::on_pushButton_6_clicked()
     ui->listWidget_2->clear();
     num = 0;
     QTime t;
+    QTime h;
     t.start();
-    if(readBTree(&dTable))
+    if(BiTree_hash==1)
     {
-        int s = t.elapsed();
-        ui->label_4->setText(tr("%1ms").arg(s));
-        s = t.elapsed();
-        readSTree(word);
-        ui->label_5->setText(tr("%1ms").arg(s));
+        DestroyDSTable(&dTable);
+        if(readBTree(&dTable))
+        {
+            int s = t.elapsed();
+            ui->label_4->setText(tr("%1ms").arg(s));
+            QMessageBox::about(this,"","二叉树文件恢复成功！     ");
+            char name[]="SaveBitTree.txt";
+            strcpy(bittxt,name);
+            ui->label_2->setText(tr("当前检索文件为：")+bittxt);
+        }
+        else
+          QMessageBox::warning(this,"","二叉树文件恢复失败！     ");
     }
     else
-      QMessageBox::warning(this,"","文件恢复失败！     ");
+    {
+        h.start();
+        if(readhash()==true)
+        {
+            int s = t.elapsed();
+            ui->label_5->setText(tr("%1ms").arg(s));
+            QMessageBox::about(this,"","哈希表文件恢复成功！     ");
+            char name[]="SaveHash.txt";
+            strcpy(hashtxt,name);
+            ui->label_2->setText(tr("当前检索文件为：")+hashtxt);
+        }
+        else
+          QMessageBox::warning(this,"","哈希表文件恢复失败！     ");
+    }
+}
+
+bool Widget::readhash()
+{
+    FILE *fs;
+    char c;
+    char word[100];
+    if((fs = fopen("SaveHash.txt","r"))==NULL)
+    {
+        return false;
+    }
+    HT=(HashTree *)malloc(sizeof(HashTree)*hushnum);
+    InitHash();
+    while((c=fgetc(fs))!=EOF)
+    {
+       fscanf(fs,"%s",word);
+       int n=GetHashNum(word);
+       HashTree p = HT[n];
+       while(p->next!=NULL)
+       {
+           p=p->next;
+       }
+       strcpy(p->word,word);
+       fscanf(fs,"%d %d",&p->line,&p->nuber);
+       p->next=(HashTree)malloc(sizeof(HashNode));
+       p->next->wordnum=0;
+       p->next->first=NULL;
+       p->wordnum ++;
+       while((c=fgetc(fs))!='#')
+       {
+           if(p->first == NULL)
+           {
+               p->first = (Repeat *)malloc(sizeof(Repeat));
+               p->tail = p->first;
+               p->first->next =NULL;
+               fscanf(fs,"%d %d",&p->tail->line,&p->tail->num);
+               p->wordnum++;
+           }
+           else
+           {
+               p->tail->next=(Repeat *)malloc(sizeof(Repeat));
+               p->tail=p->tail->next;
+               fscanf(fs,"%d %d",&p->tail->line,&p->tail->num);
+               p->tail->next = NULL;
+               p->wordnum++;
+           }
+       }
+       fgetc(fs);
+       p->next->next=NULL;
+    }
+    fclose(fs);
+    return true;
 }
 
 void Widget::on_readtxt_2_clicked()
@@ -597,4 +771,17 @@ void Widget::on_readtxt_2_clicked()
     QString path=QDir::currentPath();//获取程序当前目录
     path.replace("/","\\");//将地址中的"/"替换为"\"，因为在Windows下使用的是"\"。
     QProcess::startDetached("explorer "+path);//打开上面获取的目录
+}
+
+
+void Widget::on_pushButton_2_clicked()
+{
+    if(BiTree_hash==1)
+    {
+        print_message(dTable);
+        ui->label->setText(tr("词典中总共有 %1 个单词").arg(bittreewordnum));
+        bittreewordnum = 0;
+    }
+    else
+        Print_Hash();
 }

@@ -31,6 +31,22 @@ typedef struct BitNode{
     struct BitNode *Lchild, *Rchild;
 }BitNode,*BitTree;
 
+typedef struct Repeat{
+    int line;
+    int num;
+    struct Repeat *next;
+}Repeat;
+
+typedef struct HashNode{
+    char word[100];
+    int wordnum;
+    int line;
+    int nuber;
+    Repeat *first;
+    Repeat *tail;
+    struct HashNode *next;
+}HashNode,*HashTree;
+
 namespace Ui {
 class Widget;
 }
@@ -46,16 +62,19 @@ public:
     BitTree SearchDSTable(BitTree DT, char *e);
     Status SearchDSTable2(BitTree DT,char *e, BitTree f, BitTree *p);
     Status InsertDSTable(BitTree *DT, SaveWord e);
-    void Delete(BitTree *DT);
-    void TraverseDSTable(BitTree DT, void (*Visit)(SaveWord));
     void print_message(BitTree DT);
     int isNull(char c);
     Status Opentxt(BitTree *DT);
-    int readBTree(BitTree *DT);
-    void readSTree(SaveWord *word);
-    void CreateStaticTree(BitTree   DT);
-    int Search_Bin(SaveWord *word,char *e);
-    int saveSTree(SaveWord *word);
+    bool readBTree(BitTree *DT);
+    bool savbittree(BitTree DT);
+
+    void InitHash();
+    Status OpenHash();
+    void InsertHash(HashNode e);
+    int GetHashNum(char *word);
+    bool savehash();
+    bool readhash();
+    void Print_Hash();
     ~Widget();
 
 private slots:

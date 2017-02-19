@@ -118,7 +118,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>顺序表</string>
+    <string>哈希表</string>
    </property>
   </widget>
   <widget class="QLabel" name="label">
@@ -325,7 +325,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>顺序表</string>
+    <string>哈希表</string>
    </property>
   </widget>
   <widget class="QLabel" name="label_11">
@@ -446,7 +446,6 @@
    <property name="frameShadow">
     <enum>QFrame::Raised</enum>
    </property>
-   <zorder>readtxt_2</zorder>
   </widget>
   <zorder>frame</zorder>
   <zorder>textBrowser_2</zorder>
