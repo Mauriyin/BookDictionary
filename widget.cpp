@@ -4,9 +4,7 @@
 #include <QTime>
 #include <QProcess>
 #include <QDir>
-
-
-int number = 1;
+#include <QFileDialog>
 int keep = 0;
 int num = 0;
 int pep;
@@ -127,8 +125,7 @@ Status Widget::InsertDSTable(BitTree *DT, SaveWord e)
         s->Node = e;
         s->Node.wei = s->Node.savedate;
         s->Lchild = s->Rchild = NULL;
-        s->Node.wordnum = number;
-        number=1;
+        s->Node.wordnum = e.wordnum;
         num++;
         if(!p)
         {
@@ -144,12 +141,13 @@ Status Widget::InsertDSTable(BitTree *DT, SaveWord e)
         {
             p->Rchild = s;    //被插结点*s为右孩子
         }
-
         return TRUE;
     }
     //二叉树DT中已有与关键字相同的结点，不再插入
     else
     {
+        if(strcmp(bittxt,"SaveBitTree.txt")!=0)
+        {
         DateList q = p->Node.wei;
         q->next = (SaveDate *)malloc(sizeof(SaveDate));
         p->Node.wei=q->next;
@@ -158,6 +156,7 @@ Status Widget::InsertDSTable(BitTree *DT, SaveWord e)
         q->Page = e.savedate->Page;
         q->next = NULL;
         p->Node.wordnum ++;
+        }
         return TRUE;
     }
 }
@@ -187,9 +186,7 @@ Status Widget::Opentxt(BitTree *DT)
     DestroyDSTable(DT);
     QString name = ui->lineEdit_2->text();
     const char *hello = name.toStdString().data();
-    qDebug()<<1;
     strcpy(bittxt,hello);
-    qDebug()<<1;
     int num = 0;
     int counter = 0;
     int k=1;
@@ -260,6 +257,8 @@ bool Widget::readBTree(BitTree *DT)
     FILE *fs;
     SaveWord e;
     char c;
+    char name[]="SaveBitTree.txt";
+    strcpy(bittxt,name);
     if((fs = fopen("SaveBitTree.txt","r"))==NULL)
     {
         return 0;
@@ -690,8 +689,6 @@ void Widget::on_pushButton_6_clicked()
             int s = t.elapsed();
             ui->label_4->setText(tr("%1ms").arg(s));
             QMessageBox::about(this,"","二叉树文件恢复成功！     ");
-            char name[]="SaveBitTree.txt";
-            strcpy(bittxt,name);
             ui->label_2->setText(tr("当前检索文件为：")+bittxt);
         }
         else
@@ -768,9 +765,9 @@ bool Widget::readhash()
 
 void Widget::on_readtxt_2_clicked()
 {
-    QString path=QDir::currentPath();//获取程序当前目录
-    path.replace("/","\\");//将地址中的"/"替换为"\"，因为在Windows下使用的是"\"。
-    QProcess::startDetached("explorer "+path);//打开上面获取的目录
+    QString path=QFileDialog::getOpenFileName(this,tr("File Path"),"/");
+    ui->lineEdit_2->setText(path);
+
 }
 
 
